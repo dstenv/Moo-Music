@@ -1,0 +1,384 @@
+<template>
+    <div class="song-item">
+        <!-- vue简化开发 将template配置选项改为标签 -->
+            <header>
+                <div class="navmask"></div>
+                <nav>
+                <!-- ic_arrow_more.png   player-share-icon.png -->
+                    <img src="@/assets/Icons/ic_arrow_more.png" @click="setSongItemStatus(!songItemStatus)">
+                    <img src="@/assets/Icons/player-share-icon.png" alt="">
+                </nav>
+            </header>
+            <ul class="music-ul" ref="musicul" :style="{transform: `translateY(${-musicIndex * 667}rem)`}" @touchstart="begin" @touchend="end" @touchmove="move">
+                <li 
+                    v-for="data in songList" :key="data.id"
+                    :style="{'background-image': `url(${data.picUrl || data.al?.picUrl || data.artists[0].img1v1Url})`}"
+                >
+                    <div class="box" v-cloak>
+                        <section class="sec1" @click="setAudioPlayStatus(!audioPlayStatus)">
+                            <!-- <img :src="data.picUrl || data.al?.picUrl || data.artists[0].img1v1Url"> -->
+                            <div class="img" :style="{'background-image': `url(${data.picUrl || data.al?.picUrl || data.artists[0].img1v1Url})`}"></div>
+                            <div class="mask" v-show="!audioPlayStatus">
+                                <img src="@/assets/Icons/icon_mini_bar_play.png" alt="">
+                            </div>
+                        </section>
+                        <section class="sec2">
+                            <div class="s-name">
+                                <p>{{data.name}}</p>
+                                <!-- icon_like_selected.png -->
+                                <img :src="isHaveMusic? heartPic.unlike:heartPic.like" @click="like">
+                            </div>
+                            <div class="s-artists">
+                                <div class="left">
+                                    <div 
+                                        v-for="(item,index) in artistPic[0].picUrl? artistPic:{}" :key="index"
+                                        class="singnal" :style="{'background-image': `url(${item?.picUrl})`}">
+                                    </div>
+                                    <span :class="{many: artistPic.length>1 && artistPic[0].picUrl}">{{artistName}}</span>
+                                </div>
+                                <img src="@/assets/Icons/player-more.png" alt="">
+                            </div>
+                            <div class="s-lyric">
+                                <p></p>
+                                <img src="@/assets/Icons/lyric.png" alt="">
+                            </div>
+                        </section>
+                        <section class="sec3">
+                            <!-- @change="onChange"  -->
+                            <span>{{currentT}}</span>
+                            <span>{{durationT}}</span>
+                        </section>
+                        <section class="sec4" @touchstart.stop @touchmove.stop @touchend.stop>
+                            <van-slider 
+                                active-color="#ffffff" :button-size="'15rem'"
+                                v-model="currentValue"
+                            />
+                        </section>
+                    </div>
+                    
+                </li>
+            </ul>
+        <footer>
+            <div class="bottommask"></div>
+        </footer>
+        
+    </div>
+</template>
+<script>
+import {mapMutations, mapState} from 'vuex'
+
+export default {
+    data() {
+        return {
+            heartPic: {
+                like: require('@/assets/Icons/icon_like_selected.png'),
+                unlike: require('@/assets/Icons/like_gray.png')
+            },
+            likeSongs: [],
+            musicIndex: 0,
+            startY: 0,
+            hasMove: 0
+        }
+    },
+    props: {
+        currentT: String,
+        durationT: String,
+    },
+    methods: {
+        ...mapMutations(['setSongItemStatus','setCurrentTime','setAudioPlayStatus','setPlayingMusic']),
+        like() {
+            let find = this.likeSongs.findIndex(v => v.id == this.playingMusic.id)
+            console.log(find,this.likeSongs);
+            if(find  == -1) {
+                this.likeSongs.push(this.playingMusic)
+            }else {
+                this.likeSongs.splice(find,1)
+            }
+            localStorage.likeSongs = JSON.stringify(this.likeSongs)
+        },
+        begin(event) {
+            this.startY = event.changedTouches[0].pageY
+            // console.log(event);
+        },
+        end(event) {
+            // console.log(event.changedTouches[0].pageY - this.startY);
+            if(Math.abs(event.changedTouches[0].pageY - this.startY) <= 10) {
+                return
+            }
+            if(event.changedTouches[0].pageY - this.startY >= 150) {
+                // 上滑
+                console.log('上滑');
+                this.musicIndex = this.musicIndex - 1<=0? 0:this.musicIndex - 1
+            }
+            else if(this.startY - event.changedTouches[0].pageY >=150){
+                // 下滑
+                console.log('下滑');
+                this.musicIndex = (this.musicIndex + 1)>=this.songList.length - 1? this.songList.length - 1:this.musicIndex + 1
+            }else {
+                this.$refs.musicul.style.transform = `translateY(${-this.musicIndex*667}rem)`
+            }
+            // console.log(this.musicIndex);
+            this.setPlayingMusic(this.songList[this.musicIndex])
+            this.setAudioPlayStatus(true)
+            this.hasMove = -this.musicIndex * 667
+            // console.log(this.hasMove);
+            this.$refs.musicul.style.transition = 'all .3s'
+        },
+        move(event) {
+            // console.log(event);
+            this.$refs.musicul.style.transition = 'none'
+            let move = (this.hasMove + event.changedTouches[0].pageY - this.startY)
+            if(move >=0) {
+                move = 0
+            }
+            if(Math.abs(move) >= (this.songList.length - 1) * 667) {
+                move = -(this.songList.length - 1) * 667
+            }
+            this.$refs.musicul.style.transform = `translateY(${move}rem)`
+        }
+    },
+    computed: {
+        ...mapState(['playingMusic','songList','songItemStatus','duration','currentTime','audioPlayStatus']),
+        artistName() {
+            if(this.playingMusic.song) {
+                return this.playingMusic.song.artists.map(v => v.name).join(' / ')
+            }
+            else if(this.playingMusic.artists) {
+                return this.playingMusic.artists.map(v => v.name).join(' / ')
+            }
+            return this.playingMusic.ar.map(v => v.name).join(' / ')
+        },
+        artistPic() {
+            return this.playingMusic.song?.artists || this.playingMusic.artists || this.playingMusic.ar
+        },
+        currentValue: {
+            get() {
+                return this.currentTime / this.duration * 100
+            },
+            set(value) {
+                let current = value / 100 * this.duration
+                this.$emit('setAudioTime',current)
+            }
+        },
+        isHaveMusic() {
+            return this.likeSongs.findIndex(v => v.id == this.playingMusic.id) == -1
+        }
+    },
+    watch: {
+        
+    },
+    created() {
+        this.likeSongs = localStorage.likeSongs? JSON.parse(localStorage.likeSongs):[]
+        this.musicIndex = this.songList.findIndex(v => v.id == this.playingMusic.id)
+    }
+}
+</script>
+<style lang="scss" scoped>
+    .song-item {
+        background-size: cover;
+        height: 100vh;
+        overflow: hidden;
+    }
+    .van-slider::before {
+        z-index: 20;
+    }
+    .navmask,
+    .bottommask  {
+        position: absolute;
+        width: 100%;
+        z-index: -1;
+        left: 0;
+    }
+    .navmask {
+        height: 120rem;
+        top: 0;
+        background: linear-gradient(180deg,rgba(0,0,0,.2),transparent);
+    }
+    .bottommask {
+        position: relative;
+        bottom: 0;
+        height: 170rem;
+        background: linear-gradient(0, rgba(0,0,0,.2), transparent);
+    }
+    header,
+    footer {
+        width: 100%;
+        position: fixed;
+        left: 0;
+        box-sizing: border-box;
+        z-index: 10;
+    }
+    footer {
+        bottom: 0;
+    }
+    header {
+        top: 0;
+        padding: 20rem;
+    }
+    nav {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        img {
+            height: 30rem;
+            &:first-of-type {
+                height: 22rem;
+                transform: rotate(180deg);
+            }
+        }
+    }
+    .music-ul {
+        transition: all .3s;
+        position: relative;
+        z-index: 9;
+        &>li {
+            box-sizing: border-box;
+            // padding:70rem 20rem 0 20rem;
+            // padding-top: 70rem;
+            width: 100vw;
+            background-size: 150% 150%;
+            height: 100vh;
+        }
+        [v-cloak] {
+            display: none;
+        }
+    }
+    .box {
+        width: 100vw;
+        height: 100vh;
+        backdrop-filter: blur(65rem);
+        padding: 70rem 20rem 0;
+        box-sizing: border-box;
+        position: relative;
+        
+    }
+    section {
+        padding: 0 12rem;
+    }
+    .sec1 {
+        padding-bottom: 15rem;
+        position: relative;
+        z-index: 10;
+        img {
+            width: 100%;
+            display: block;
+            border-radius: 8rem;
+        }
+        .img {
+            border-radius: 8rem;
+            width: 311.2rem;
+            height: 311.2rem;
+            background-size: cover;
+        }
+        .mask {
+            border-radius: 8rem;
+            background-color: rgba(0,0,0,.4);
+            width: calc(100% - 24rem);
+            height: calc(100% - 15rem);
+            bottom: 15rem;
+            left: 12rem;
+            z-index: 5;
+            position: absolute;
+            img {
+                display: block;
+                position: absolute;
+                left: 0;
+                right: 0;
+                top: 0;
+                bottom: 0;
+                margin: auto;
+                width: 120rem;
+            }
+        }
+    }
+    .sec2 {
+        position: relative;
+        z-index: 20;
+        padding-bottom: 10rem;
+        div {
+            overflow: hidden;
+        }
+        .s-name {
+            color: #f8f8f8;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            p {
+                flex: 1;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                font-size: 20rem;
+                font-weight: bold;
+            }
+            img {
+                flex: none;
+                display: block;
+                height: 35rem;
+            }
+        }
+        .s-artists {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 10rem;
+            span {
+                color: #f8f8f8;
+            }
+            img {
+                flex: none;
+                display: block;
+                height: 35rem;
+            }
+            .left {
+                display: flex;
+                align-items: center;
+                .singnal {
+                    border-radius: 50%;
+                    width: 35rem;
+                    height: 35rem;
+                    background-size: cover;
+                    position: relative;
+                    &:nth-of-type(n+2) {
+                        left: -17.5rem;
+                    }
+                }
+                span {
+                    font-size: 14rem;
+                    letter-spacing: 1rem;
+                    margin-left: 10rem;
+                    font-weight: bold;
+                }
+                .many {
+                    position: relative;
+                    left: -17.5rem;
+                }
+            }
+        }
+        .s-lyric {
+            display: flex;
+            justify-content: space-between;
+            img {
+                margin-right: 4rem;
+                height: 28rem;
+                outline: none;
+            }
+        }
+    }
+    .sec3 {
+        padding-bottom: 15rem;
+        margin-top: 30rem;
+        display: flex;
+        justify-content: space-between;
+        span {
+            color: #fafaff;
+            font-size: 14rem;
+            font-weight: bold;
+        }
+    }
+    .sec4 {
+        position: relative;
+        z-index: 11;
+    }
+</style>
